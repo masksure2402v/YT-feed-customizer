@@ -16,18 +16,17 @@ function formatViews(views) {
 }
 
 
-
 function timeAgo(dateStr) {
   const now = new Date();
   const past = new Date(dateStr);
-  const diff = Math.floor((now - past) / 1000); 
+  const diff = Math.floor((now - past) / 1000);
 
   const units = [
-    { label: 'year',   seconds: 31536000 },
-    { label: 'month',  seconds: 2592000 },
-    { label: 'week',   seconds: 604800 },
-    { label: 'day',    seconds: 86400 },
-    { label: 'hour',   seconds: 3600 },
+    { label: 'year', seconds: 31536000 },
+    { label: 'month', seconds: 2592000 },
+    { label: 'week', seconds: 604800 },
+    { label: 'day', seconds: 86400 },
+    { label: 'hour', seconds: 3600 },
     { label: 'minute', seconds: 60 }
   ];
 
@@ -40,48 +39,22 @@ function timeAgo(dateStr) {
 }
 
 
-async function fetchLatestVideoFromChannel(channelId) {
-  const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-  const res = await fetch(url);
-  const text = await res.text();
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(text, "application/xml");
-
-  const entry = xml.querySelector("entry");
-  if (!entry) throw new Error("❌ No video found in feed.");
-
-  const ytNS = "http://www.youtube.com/xml/schemas/2015";
-  const mediaNS = "http://search.yahoo.com/mrss/";
-
-  const videoId = entry.getElementsByTagNameNS(ytNS, "videoId")[0]?.textContent;
-  const title = entry.querySelector("title")?.textContent;
-  const published = entry.querySelector("published")?.textContent;
-  const views = entry.getElementsByTagNameNS(mediaNS, "statistics")[0]?.getAttribute("views");
-  const channelName = xml.querySelector("author > name")?.textContent || "Unknown Channel";
-
-  return {
-    videoId,
-    title,
-    published,
-    views,
-    channelName,
-    thumbnail: `https://i.ytimg.com/vi/${videoId}/hq720.jpg`
-  };
+function shuffleArray(arr) {
+  return arr
+    .map(v => ({ v, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({ v }) => v);
 }
-
-
-
 
 
 function injectVideoTile(container, video) {
   if (!video?.videoId || container.querySelector(".my-real-video")) return;
 
-  const timeSince = timeAgo(video.published);
-
+  injectFinalStyles()
   const wrapper = document.createElement("ytd-rich-item-renderer");
   wrapper.className = "style-scope ytd-rich-grid-renderer my-real-video";
-  wrapper.innerHTML = `
-    <ytd-rich-grid-media class="style-scope ytd-rich-item-renderer">
+  wrapper.innerHTML = 
+    `<ytd-rich-grid-media class="style-scope ytd-rich-item-renderer">
       <div id="content" class="style-scope ytd-rich-grid-media">
         <a href="https://www.youtube.com/watch?v=${video.videoId}" class="yt-simple-endpoint style-scope ytd-rich-grid-media" tabindex="-1">
           <div id="dismissible" class="style-scope ytd-rich-grid-media">
@@ -89,7 +62,7 @@ function injectVideoTile(container, video) {
               <ytd-thumbnail class="style-scope ytd-rich-grid-media">
                 <a id="thumbnail" class="yt-simple-endpoint inline-block style-scope ytd-thumbnail" href="https://www.youtube.com/watch?v=${video.videoId}">
                   <yt-image class="style-scope ytd-thumbnail">
-                    <img src="${video.thumbnail}" width="100%">
+                    <img src="${video.thumbnail}" alt="${video.title}" width="100%" style="aspect-ratio: 16 / 9; object-fit: cover;" />
                   </yt-image>
                 </a>
               </ytd-thumbnail>
@@ -112,10 +85,60 @@ function injectVideoTile(container, video) {
           </div>
         </a>
       </div>
-    </ytd-rich-grid-media>
-  `;
+    </ytd-rich-grid-media>`
+  ;
 
   container.insertBefore(wrapper, container.children[1]);
+
+  // Avatar block
+  const avatarContainer = document.createElement("div");
+  avatarContainer.id = "avatar-container";
+  avatarContainer.className = "yt-simple-endpoint style-scope ytd-rich-grid-media";
+
+  const avatarLink = document.createElement("a");
+  avatarLink.id = "avatar-link";
+  avatarLink.className = "yt-simple-endpoint style-scope ytd-rich-grid-media";
+  avatarLink.href = `https://www.youtube.com/channel/${video.channelId}`;
+  avatarLink.title = video.channelName;
+  avatarLink.tabIndex = "-1";
+
+  const ytImgShadow = document.createElement("yt-img-shadow");
+  ytImgShadow.id = "avatar-image";
+  ytImgShadow.className = "style-scope ytd-rich-grid-media no-transition";
+  ytImgShadow.style.backgroundColor = "transparent";
+  ytImgShadow.setAttribute("width", "48");
+
+  const img = document.createElement("img");
+  img.id = "img";
+  img.className = "style-scope yt-img-shadow";
+  img.src = video.channelLogo;
+  img.width = 48;
+  img.draggable = false;
+  img.alt = video.channelName;
+
+  ytImgShadow.appendChild(img);
+  avatarLink.appendChild(ytImgShadow);
+  avatarContainer.appendChild(avatarLink);
+
+  // Create metadata container to wrap avatar + meta
+  const metadataContainer = document.createElement("div");
+  metadataContainer.id = "metadata-container";
+  metadataContainer.className = "style-scope ytd-rich-grid-media";
+  metadataContainer.style.display = "flex";
+
+  // Grab the existing meta div
+  const meta = wrapper.querySelector("#meta");
+
+  // Move the existing meta into this container
+  if (meta) {
+    metadataContainer.appendChild(avatarContainer); // 👈 Avatar on the left
+    metadataContainer.appendChild(meta);            // 👈 Meta (title, etc.) on the right
+
+    // Replace original meta with new container
+    const dismissible = wrapper.querySelector("#dismissible");
+    dismissible.appendChild(metadataContainer);
+  }
+
 
   // Create ytd-channel-name block
   const channelNameWrapper = document.createElement("ytd-channel-name");
@@ -202,42 +225,117 @@ function injectFinalStyles() {
   document.head.appendChild(style);
 }
 
-async function setupObserver() {
-  const target = document.querySelector("div#contents.style-scope.ytd-rich-grid-renderer");
 
-  if (!target) {
-    console.warn("❌ #contents not found yet. Retrying...");
-    setTimeout(setupObserver, 500);
-    return;
+async function fetchVideosFromChannel(uploadsPlaylistId, channelLogo) {
+  const API_KEY = "AIzaSyBopwfGD7jMnQ4MXbvPcfHZ7BJaj_awnSk";
+  const maxResults = 5;
+
+  // Step 1: Fetch playlist items (basic info)
+  const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${API_KEY}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!data.items || data.items.length === 0) {
+    throw new Error("❌ No videos found for playlist: " + uploadsPlaylistId);
   }
 
-  injectFinalStyles();
+  // Step 2: Extract video IDs
+  const videoIds = data.items
+    .map(item => item.snippet?.resourceId?.videoId)
+    .filter(Boolean);
 
-  const channelId = "UCWI-ohtRu8eEeDj93hmUsUQ"; // ✅ CodeWithHarry
-  try {
-    const video = await fetchLatestVideoFromChannel(channelId);
-    console.log("🎯 Channel:", video.channelName);
-    
-    // ✅ Only inject AFTER video is fetched
-    injectVideoTile(target, video);
-
-    // ✅ Observer waits until you have valid data
-    const observer = new MutationObserver(() => {
-      injectVideoTile(target, video);
-    });
-
-    observer.observe(target, { childList: true, subtree: false });
-    console.log("👁️ Watching and injecting:", video.title);
-
-  } catch (err) {
-    console.error("💥 Failed to fetch video:", err);
+  if (videoIds.length === 0) {
+    throw new Error("❌ No valid video IDs found");
   }
+
+  // Step 3: Fetch video statistics for all video IDs
+  const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds.join(",")}&key=${API_KEY}`;
+  const statsRes = await fetch(statsUrl);
+  const statsData = await statsRes.json();
+
+  const statsMap = {};
+  for (const video of statsData.items || []) {
+    statsMap[video.id] = {
+      views: video.statistics?.viewCount || "0"
+    };
+  }
+
+  // Step 4: Build the final list
+  return data.items
+    .map(item => {
+      const snippet = item.snippet;
+      const videoId = snippet?.resourceId?.videoId;
+      if (!videoId) return null;
+
+      return {
+        videoId,
+        title: snippet.title,
+        published: snippet.publishedAt,
+        thumbnail: snippet.thumbnails?.high?.url,
+        channelId: snippet.channelId,
+        channelName: snippet.channelTitle,
+        views: Number(statsMap[videoId]?.views || 0), // ✅ Real view count
+        channelLogo
+      };
+    })
+    .filter(Boolean);
 }
 
 
 
+
+
+
+async function setupVideoInjection() {
+  // Step 1: Try to get the YouTube video container
+  const container = document.querySelector("div#contents.style-scope.ytd-rich-grid-renderer");
+
+  if (!container) {
+    console.warn("❌ YouTube container not ready. Retrying in 1s...");
+    setTimeout(setupVideoInjection, 1000);
+    return;
+  }
+
+  // Step 2: Retrieve channel list from storage
+  chrome.storage.local.get(["channels"], async ({ channels }) => {
+    console.log("📦 Retrieved channels from storage:", channels);
+
+    if (!channels || !Array.isArray(channels) || channels.length === 0) {
+      console.warn("❌ No valid channels found in storage.");
+      return;
+    }
+
+    // Step 3: Loop through each channel
+    for (const { uploadsPlaylistId, handle, channelLogo } of channels) {
+      console.log(`📡 Fetching videos for: ${handle} ${channelLogo} (${uploadsPlaylistId})`);
+
+      try {
+        const videos = await fetchVideosFromChannel(uploadsPlaylistId, channelLogo);
+        console.log(`📺 Fetched ${videos.length} videos for ${handle}:`, videos);
+
+        // const remainingVideos = videos.slice(1);
+        // console.log(`🔪 Skipped first video from ${handle}. Remaining:`, remainingVideos);
+
+        // const toInject = shuffleArray(videos);
+        // console.log(`🎲 Shuffled videos to inject from ${handle}:`, toInject);
+
+        videos.forEach(video => {
+          console.log(`📦 Injecting ${video.title} from ${handle}`);
+          injectVideoTile(container, video);
+        });
+
+      } catch (err) {
+        console.error(`💥 Failed to fetch videos from ${handle} (${uploadsPlaylistId}):`, err);
+      }
+    }
+  });
+}
+
+
+
+
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", setupObserver);
+  document.addEventListener("DOMContentLoaded", setupVideoInjection);
 } else {
-  setupObserver();
+  setupVideoInjection();
 }
