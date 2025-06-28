@@ -50,141 +50,78 @@ function shuffleArray(arr) {
 function injectVideoTile(container, video) {
   if (!video?.videoId || container.querySelector(".my-real-video")) return;
 
-  injectFinalStyles()
-  const wrapper = document.createElement("ytd-rich-item-renderer");
-  wrapper.className = "style-scope ytd-rich-grid-renderer my-real-video";
-  wrapper.innerHTML = 
-    `<ytd-rich-grid-media class="style-scope ytd-rich-item-renderer">
-      <div id="content" class="style-scope ytd-rich-grid-media">
-        <a href="https://www.youtube.com/watch?v=${video.videoId}" class="yt-simple-endpoint style-scope ytd-rich-grid-media" tabindex="-1">
-          <div id="dismissible" class="style-scope ytd-rich-grid-media">
-            <div id="thumbnail" class="style-scope ytd-rich-grid-media">
-              <ytd-thumbnail class="style-scope ytd-rich-grid-media">
-                <a id="thumbnail" class="yt-simple-endpoint inline-block style-scope ytd-thumbnail" href="https://www.youtube.com/watch?v=${video.videoId}">
-                  <yt-image class="style-scope ytd-thumbnail">
-                    <img src="${video.thumbnail}" alt="${video.title}" width="100%" style="aspect-ratio: 16 / 9; object-fit: cover;" />
-                  </yt-image>
-                </a>
-              </ytd-thumbnail>
-            </div>
+  injectFinalStyles();
 
-            <div id="meta" class="style-scope ytd-rich-grid-media">
-              <h3 class="style-scope ytd-rich-grid-media">
-                <a class="yt-simple-endpoint style-scope ytd-rich-grid-media" href="https://www.youtube.com/watch?v=${video.videoId}">
-                  <span class="style-scope ytd-rich-grid-media">${video.title}</span>
-                </a>
-              </h3>
-              <ytd-video-meta-block class="style-scope ytd-rich-grid-media">
-                <div id="metadata" class="style-scope ytd-video-meta-block">
-                  <!-- 👇 CHANNEL NAME WILL BE INJECTED MANUALLY -->
-                  <div id="metadata-line" class="style-scope ytd-video-meta-block">
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = `
+    <ytd-rich-item-renderer class="style-scope ytd-rich-grid-renderer my-real-video">
+      <ytd-rich-grid-media class="style-scope ytd-rich-item-renderer">
+        <div id="content" class="style-scope ytd-rich-grid-media">
+          <a href="https://www.youtube.com/watch?v=${video.videoId}" class="yt-simple-endpoint style-scope ytd-rich-grid-media" tabindex="-1">
+            <div id="dismissible" class="style-scope ytd-rich-grid-media">
+
+              <!-- Thumbnail -->
+              <div id="thumbnail" class="style-scope ytd-rich-grid-media">
+                <ytd-thumbnail class="style-scope ytd-rich-grid-media">
+                  <a id="thumbnail" class="yt-simple-endpoint inline-block style-scope ytd-thumbnail" href="https://www.youtube.com/watch?v=${video.videoId}">
+                    <yt-image class="style-scope ytd-thumbnail">
+                      <img src="${video.thumbnail}" alt="${video.title}" width="100%" style="aspect-ratio: 16 / 9; object-fit: cover;" />
+                    </yt-image>
+                  </a>
+                </ytd-thumbnail>
+              </div>
+
+              <!-- Meta with avatar aligned horizontally -->
+              <div id="meta" class="style-scope ytd-rich-grid-media">
+                <div id="metadata-container" class="style-scope ytd-rich-grid-media" style="display: flex;">
+                  
+                  <!-- Avatar -->
+                  <div id="avatar-container" class="yt-simple-endpoint style-scope ytd-rich-grid-media">
+                    <a id="avatar-link" class="yt-simple-endpoint style-scope ytd-rich-grid-media" href="https://www.youtube.com/channel/${video.channelId}" title="${video.channelName}" tabindex="-1">
+                      <yt-img-shadow id="avatar-image" class="style-scope ytd-rich-grid-media no-transition" style="background-color: transparent;" width="48">
+                        <img id="img" class="style-scope yt-img-shadow" src="${video.channelLogo}" width="48" draggable="false" alt="${video.channelName}">
+                      </yt-img-shadow>
+                    </a>
+                  </div>
+
+                  <!-- Text block: title + meta -->
+                  <div id="text-container" class="style-scope ytd-rich-grid-media">
+                    <h3 class="style-scope ytd-rich-grid-media">
+                      <a class="yt-simple-endpoint style-scope ytd-rich-grid-media" href="https://www.youtube.com/watch?v=${video.videoId}">
+                        <span class="style-scope ytd-rich-grid-media">${video.title}</span>
+                      </a>
+                    </h3>
+
+                    <ytd-video-meta-block class="style-scope ytd-rich-grid-media">
+                      <div id="metadata" class="style-scope ytd-video-meta-block">
+                        <ytd-channel-name class="style-scope ytd-video-meta-block">
+                          <div class="style-scope ytd-channel-name">
+                            <a class="yt-simple-endpoint style-scope ytd-channel-name" href="https://www.youtube.com/channel/${video.channelId}">
+                              <span class="style-scope ytd-channel-name">${video.channelName}</span>
+                            </a>
+                          </div>
+                        </ytd-channel-name>
+
+                        <div id="metadata-line" class="style-scope ytd-video-meta-block">
+                          <span class="views style-scope ytd-video-meta-block">${formatViews(video.views)}</span>
+                          <span class="views style-scope ytd-video-meta-block">${timeAgo(video.published)}</span>
+                        </div>
+                      </div>
+                    </ytd-video-meta-block>
                   </div>
                 </div>
-              </ytd-video-meta-block>
+              </div>
+
             </div>
-          </div>
-        </a>
-      </div>
-    </ytd-rich-grid-media>`
-  ;
+          </a>
+        </div>
+      </ytd-rich-grid-media>
+    </ytd-rich-item-renderer>
+  `;
 
-  container.insertBefore(wrapper, container.children[1]);
-
-  // Avatar block
-  const avatarContainer = document.createElement("div");
-  avatarContainer.id = "avatar-container";
-  avatarContainer.className = "yt-simple-endpoint style-scope ytd-rich-grid-media";
-
-  const avatarLink = document.createElement("a");
-  avatarLink.id = "avatar-link";
-  avatarLink.className = "yt-simple-endpoint style-scope ytd-rich-grid-media";
-  avatarLink.href = `https://www.youtube.com/channel/${video.channelId}`;
-  avatarLink.title = video.channelName;
-  avatarLink.tabIndex = "-1";
-
-  const ytImgShadow = document.createElement("yt-img-shadow");
-  ytImgShadow.id = "avatar-image";
-  ytImgShadow.className = "style-scope ytd-rich-grid-media no-transition";
-  ytImgShadow.style.backgroundColor = "transparent";
-  ytImgShadow.setAttribute("width", "48");
-
-  const img = document.createElement("img");
-  img.id = "img";
-  img.className = "style-scope yt-img-shadow";
-  img.src = video.channelLogo;
-  img.width = 48;
-  img.draggable = false;
-  img.alt = video.channelName;
-
-  ytImgShadow.appendChild(img);
-  avatarLink.appendChild(ytImgShadow);
-  avatarContainer.appendChild(avatarLink);
-
-  // Create metadata container to wrap avatar + meta
-  const metadataContainer = document.createElement("div");
-  metadataContainer.id = "metadata-container";
-  metadataContainer.className = "style-scope ytd-rich-grid-media";
-  metadataContainer.style.display = "flex";
-
-  // Grab the existing meta div
-  const meta = wrapper.querySelector("#meta");
-
-  // Move the existing meta into this container
-  if (meta) {
-    metadataContainer.appendChild(avatarContainer); // 👈 Avatar on the left
-    metadataContainer.appendChild(meta);            // 👈 Meta (title, etc.) on the right
-
-    // Replace original meta with new container
-    const dismissible = wrapper.querySelector("#dismissible");
-    dismissible.appendChild(metadataContainer);
-  }
-
-
-  // Create ytd-channel-name block
-  const channelNameWrapper = document.createElement("ytd-channel-name");
-  channelNameWrapper.className = "style-scope ytd-video-meta-block";
-
-  const innerDiv = document.createElement("div");
-  innerDiv.className = "style-scope ytd-channel-name";
-
-  const channelLink = document.createElement("a");
-  channelLink.className = "yt-simple-endpoint style-scope ytd-channel-name";
-  channelLink.href = `https://www.youtube.com/channel/${video.channelId}`;
-
-  // Avoid yt-formatted-string, use span
-  const channelNameSpan = document.createElement("span");
-  channelNameSpan.className = "style-scope ytd-channel-name";
-  channelNameSpan.textContent = video.channelName || "Unknown Channel";
-
-  channelLink.appendChild(channelNameSpan);
-  innerDiv.appendChild(channelLink);
-  channelNameWrapper.appendChild(innerDiv);
-
-  // Create metadata line block (views + time)
-  const metadataLine = document.createElement("div");
-  metadataLine.id = "metadata-line";
-  metadataLine.className = "style-scope ytd-video-meta-block";
-
-  const viewsSpan = document.createElement("span");
-  viewsSpan.className = "views style-scope ytd-video-meta-block";
-  viewsSpan.textContent = formatViews(video.views);
-
-  const timeSpan = document.createElement("span");
-  timeSpan.className = "views style-scope ytd-video-meta-block";
-  timeSpan.textContent = timeAgo(video.published);
-
-  metadataLine.appendChild(viewsSpan);
-  metadataLine.appendChild(timeSpan);
-
-  // Inject into tile
-  const metaBlock = wrapper.querySelector("#metadata");
-  if (metaBlock) {
-    metaBlock.appendChild(channelNameWrapper);  // 👈 First: Channel Name
-    metaBlock.appendChild(metadataLine);        // 👈 Second: Views & Time
-    console.log("✅ Injected channel and metadata properly");
-  }
+  // Insert the first real tile
+  container.insertBefore(wrapper.firstElementChild, container.children[1]);
 }
-
 
 
 
