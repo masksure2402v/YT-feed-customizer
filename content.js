@@ -1,4 +1,3 @@
-
 function formatViews(views) {
   const num = parseInt(views);
   if (isNaN(num)) return "0 views";
@@ -14,7 +13,6 @@ function formatViews(views) {
 
   return num + " views";
 }
-
 
 function timeAgo(dateStr) {
   const now = new Date();
@@ -38,17 +36,8 @@ function timeAgo(dateStr) {
   return 'Just now';
 }
 
-
-function shuffleArray(arr) {
-  return arr
-    .map(v => ({ v, sort: Math.random() }))
-    .sort((a, b) => a.sort - b.sort)
-    .map(({ v }) => v);
-}
-
-
-function injectVideoTile(container, video) {
-  if (!video?.videoId || container.querySelector(".my-real-video")) return;
+function injectVideoTile(container, video, position = 1) {
+  if (!video?.videoId) return;
 
   injectFinalStyles();
 
@@ -119,11 +108,10 @@ function injectVideoTile(container, video) {
     </ytd-rich-item-renderer>
   `;
 
-  // Insert the first real tile
-  container.insertBefore(wrapper.firstElementChild, container.children[1]);
+  // Clamp position to valid range
+  const insertBeforeNode = container.children[position] || null;
+  container.insertBefore(wrapper.firstElementChild, insertBeforeNode);
 }
-
-
 
 function injectFinalStyles() {
   if (document.querySelector("#my-injected-style")) return;
@@ -162,7 +150,6 @@ function injectFinalStyles() {
   document.head.appendChild(style);
 }
 
-
 async function fetchVideosFromChannel(uploadsPlaylistId, channelLogo) {
   const API_KEY = "AIzaSyBopwfGD7jMnQ4MXbvPcfHZ7BJaj_awnSk";
   const maxResults = 5;
@@ -171,39 +158,29 @@ async function fetchVideosFromChannel(uploadsPlaylistId, channelLogo) {
   const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${API_KEY}`;
   const res = await fetch(url);
   const data = await res.json();
-
   if (!data.items || data.items.length === 0) {
     throw new Error("❌ No videos found for playlist: " + uploadsPlaylistId);
   }
-
-  // Step 2: Extract video IDs
   const videoIds = data.items
     .map(item => item.snippet?.resourceId?.videoId)
     .filter(Boolean);
-
   if (videoIds.length === 0) {
     throw new Error("❌ No valid video IDs found");
   }
-
-  // Step 3: Fetch video statistics for all video IDs
   const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds.join(",")}&key=${API_KEY}`;
   const statsRes = await fetch(statsUrl);
   const statsData = await statsRes.json();
-
   const statsMap = {};
   for (const video of statsData.items || []) {
     statsMap[video.id] = {
       views: video.statistics?.viewCount || "0"
     };
   }
-
-  // Step 4: Build the final list
   return data.items
     .map(item => {
       const snippet = item.snippet;
       const videoId = snippet?.resourceId?.videoId;
       if (!videoId) return null;
-
       return {
         videoId,
         title: snippet.title,
@@ -211,29 +188,52 @@ async function fetchVideosFromChannel(uploadsPlaylistId, channelLogo) {
         thumbnail: snippet.thumbnails?.high?.url,
         channelId: snippet.channelId,
         channelName: snippet.channelTitle,
-        views: Number(statsMap[videoId]?.views || 0), // ✅ Real view count
+        views: Number(statsMap[videoId]?.views || 0),
         channelLogo
       };
     })
     .filter(Boolean);
 }
 
+async function getAllVideosFromChannels(channels) {
+  let allVideos = [];
+  for (const { uploadsPlaylistId, handle, channelLogo } of channels) {
+    try {
+      const videos = await fetchVideosFromChannel(uploadsPlaylistId, channelLogo);
+      allVideos = allVideos.concat(videos);
+    } catch (err) {
+      console.error(`💥 Failed to fetch videos from ${handle} (${uploadsPlaylistId}):`, err);
+    }
+  }
+  return allVideos;
+}
 
 
+
+function getLatestNVideos(videos, n = 3) {
+  return videos
+    .sort((a, b) => new Date(b.published) - new Date(a.published))
+    .slice(0, n);
+}
+
+
+function injectVideosToHomePage(videos) {
+  const container = document.querySelector("div#contents.style-scope.ytd-rich-grid-renderer");
+  if (!container) {
+    console.warn("❌ YouTube container not ready. Retrying in 1s...");
+    setTimeout(() => injectVideosToHomePage(videos), 100);
+    return;
+  }
+  // Example: insert at positions 1, 4, 7 (or any you want)
+  const positions = [1, 4, 7];
+  videos.forEach((video, i) => {
+    injectVideoTile(container, video, positions[i] ?? (i + 1));
+  });
+}
 
 
 
 async function setupVideoInjection() {
-  // Step 1: Try to get the YouTube video container
-  const container = document.querySelector("div#contents.style-scope.ytd-rich-grid-renderer");
-
-  if (!container) {
-    console.warn("❌ YouTube container not ready. Retrying in 1s...");
-    setTimeout(setupVideoInjection, 1000);
-    return;
-  }
-
-  // Step 2: Retrieve channel list from storage
   chrome.storage.local.get(["channels"], async ({ channels }) => {
     console.log("📦 Retrieved channels from storage:", channels);
 
@@ -242,29 +242,15 @@ async function setupVideoInjection() {
       return;
     }
 
-    // Step 3: Loop through each channel
-    for (const { uploadsPlaylistId, handle, channelLogo } of channels) {
-      console.log(`📡 Fetching videos for: ${handle} ${channelLogo} (${uploadsPlaylistId})`);
-
-      try {
-        const videos = await fetchVideosFromChannel(uploadsPlaylistId, channelLogo);
-        console.log(`📺 Fetched ${videos.length} videos for ${handle}:`, videos);
-
-        // const remainingVideos = videos.slice(1);
-        // console.log(`🔪 Skipped first video from ${handle}. Remaining:`, remainingVideos);
-
-        // const toInject = shuffleArray(videos);
-        // console.log(`🎲 Shuffled videos to inject from ${handle}:`, toInject);
-
-        videos.forEach(video => {
-          console.log(`📦 Injecting ${video.title} from ${handle}`);
-          injectVideoTile(container, video);
-        });
-
-      } catch (err) {
-        console.error(`💥 Failed to fetch videos from ${handle} (${uploadsPlaylistId}):`, err);
-      }
+    const allVideos = await getAllVideosFromChannels(channels);
+    if (!allVideos.length) {
+      console.warn("❌ No videos fetched from any channel.");
+      return;
     }
+    
+    const latestVideos = getLatestNVideos(allVideos, 3);
+    console.log("🎬 Latest 3 videos:", latestVideos);
+    injectVideosToHomePage(latestVideos);
   });
 }
 
