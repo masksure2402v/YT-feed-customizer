@@ -4,24 +4,21 @@ const API_KEY = 'AIzaSyBopwfGD7jMnQ4MXbvPcfHZ7BJaj_awnSk';
  * 🔄 Convert @handle → channelId, uploadsPlaylistId, and thumbnail
  */
 async function getChannelInfoFromHandle(handle) {
-  // Step 1: Get the channel ID from handle
-  const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(handle)}&key=${API_KEY}`;
-  const searchRes = await fetch(searchUrl);
-  const searchData = await searchRes.json();
+  // Remove '@' if present
+  const cleanHandle = handle.startsWith('@') ? handle.slice(1) : handle;
 
-  if (!searchData.items?.length) {
-    throw new Error("❌ Channel not found.");
-  }
-
-  const channelId = searchData.items[0].id.channelId;
-
-  // Step 2: Get uploadsPlaylistId + thumbnail from channel info
-  const channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails,snippet&id=${channelId}&key=${API_KEY}`;
+  // Use the channels endpoint with forHandle
+  const channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&forHandle=${encodeURIComponent(cleanHandle)}&key=${API_KEY}`;
   const channelRes = await fetch(channelUrl);
   const channelData = await channelRes.json();
 
-  const uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-  const channelLogo = channelData.items?.[0]?.snippet?.thumbnails?.high?.url;
+  if (!channelData.items || channelData.items.length === 0) {
+    throw new Error("❌ Channel not found.");
+  }
+
+  const channelId = channelData.items[0].id;
+  const uploadsPlaylistId = channelData.items[0].contentDetails?.relatedPlaylists?.uploads;
+  const channelLogo = channelData.items[0].snippet?.thumbnails?.high?.url;
 
   if (!uploadsPlaylistId || !channelLogo) {
     throw new Error("❌ Could not get all required data for channel.");
@@ -29,6 +26,65 @@ async function getChannelInfoFromHandle(handle) {
 
   return { channelId, uploadsPlaylistId, channelLogo };
 }
+
+/**
+ * 📋 Display the list of saved channels
+ */
+function displayChannels(channels) {
+  const channelsList = document.getElementById('channelsList');
+  
+  if (!channels || channels.length === 0) {
+    channelsList.innerHTML = '<div class="no-channels">No channels added yet</div>';
+    return;
+  }
+
+  channelsList.innerHTML = channels.map((channel, index) => `
+    <div class="channel-item">
+      <div class="channel-info">
+        <img src="${channel.channelLogo}" alt="${channel.handle}" class="channel-thumbnail" onerror="this.style.display='none'">
+        <span class="channel-handle">${channel.handle}</span>
+      </div>
+      <button class="delete-btn" data-index="${index}">Delete</button>
+    </div>
+  `).join('');
+
+  // Add event listeners to delete buttons
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt(e.target.dataset.index);
+      deleteChannel(index);
+    });
+  });
+}
+
+/**
+ * 🗑️ Delete a channel from storage
+ */
+function deleteChannel(index) {
+  chrome.storage.local.get(["channels"], (result) => {
+    const channels = result.channels || [];
+    
+    if (index >= 0 && index < channels.length) {
+      const deletedChannel = channels[index];
+      channels.splice(index, 1);
+      
+      chrome.storage.local.set({ channels }, () => {
+        console.log("🗑️ Deleted channel:", deletedChannel.handle);
+        displayChannels(channels);
+        alert(`✅ Deleted ${deletedChannel.handle}`);
+      });
+    }
+  });
+}
+
+/**
+ * 🔄 Load and display channels when popup opens
+ */
+document.addEventListener('DOMContentLoaded', () => {
+  chrome.storage.local.get(["channels"], (result) => {
+    displayChannels(result.channels || []);
+  });
+});
 
 /**
  * 🎯 Handle popup form submission
@@ -61,6 +117,7 @@ document.querySelector("#addChannelBtn").addEventListener("click", async () => {
       chrome.storage.local.set({ channels }, () => {
         console.log("📦 Saved channel:", { handle, channelId, uploadsPlaylistId, channelLogo });
         input.value = "";
+        displayChannels(channels);
         alert(`✅ Channel saved! ${handle}`);
       });
     });
