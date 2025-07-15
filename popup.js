@@ -78,13 +78,88 @@ function deleteChannel(index) {
 }
 
 /**
+ * 🎚️ Update frequency display and buttons
+ */
+function updateFrequencyDisplay(frequency) {
+  const frequencyValue = document.getElementById('frequencyValue');
+  const frequencySlider = document.getElementById('frequencySlider');
+  const decreaseBtn = document.getElementById('decreaseBtn');
+  const increaseBtn = document.getElementById('increaseBtn');
+  
+  frequencyValue.textContent = frequency;
+  frequencySlider.value = frequency;
+  
+  // Update button states
+  decreaseBtn.disabled = frequency <= 1;
+  increaseBtn.disabled = frequency >= 20;
+}
+
+/**
+ * 💾 Save frequency to storage
+ */
+function saveFrequency(frequency) {
+  chrome.storage.local.set({ videoFrequency: frequency }, () => {
+    console.log("🎚️ Saved frequency:", frequency);
+    updateFrequencyDisplay(frequency);
+  });
+}
+
+/**
+ * 📊 Load frequency from storage
+ */
+function loadFrequency() {
+  chrome.storage.local.get(["videoFrequency"], (result) => {
+    const frequency = result.videoFrequency || 5; // Default to 5
+    updateFrequencyDisplay(frequency);
+  });
+}
+
+/**
  * 🔄 Load and display channels when popup opens
  */
 document.addEventListener('DOMContentLoaded', () => {
+  // Load channels
   chrome.storage.local.get(["channels"], (result) => {
     displayChannels(result.channels || []);
   });
+  
+  // Load frequency settings
+  loadFrequency();
+  
+  // Setup frequency controls
+  setupFrequencyControls();
 });
+
+/**
+ * 🎛️ Setup frequency control event listeners
+ */
+function setupFrequencyControls() {
+  const frequencySlider = document.getElementById('frequencySlider');
+  const decreaseBtn = document.getElementById('decreaseBtn');
+  const increaseBtn = document.getElementById('increaseBtn');
+  
+  // Slider change
+  frequencySlider.addEventListener('input', (e) => {
+    const frequency = parseInt(e.target.value);
+    saveFrequency(frequency);
+  });
+  
+  // Decrease button
+  decreaseBtn.addEventListener('click', () => {
+    const currentValue = parseInt(frequencySlider.value);
+    if (currentValue > 1) {
+      saveFrequency(currentValue - 1);
+    }
+  });
+  
+  // Increase button
+  increaseBtn.addEventListener('click', () => {
+    const currentValue = parseInt(frequencySlider.value);
+    if (currentValue < 20) {
+      saveFrequency(currentValue + 1);
+    }
+  });
+}
 
 /**
  * 🎯 Handle popup form submission

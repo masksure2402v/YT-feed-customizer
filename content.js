@@ -35,7 +35,42 @@ function timeAgo(dateStr) {
 
   return 'Just now';
 }
+function injectFinalStyles() {
+  if (document.querySelector("#my-injected-style")) return;
 
+  const style = document.createElement("style");
+  style.id = "my-injected-style";
+  style.textContent = `
+    .my-real-video {
+      top: -20px
+    }
+    .my-real-video img{
+      border-radius: 12px;
+    }
+    .style-scope.ytd-rich-grid-media{
+      font-size: 15px
+    }  
+    .views{
+      font-size: 14px
+    }
+    .my-real-video #metadata {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13.5px;
+      color: var(--yt-spec-text-secondary);
+    }
+
+    .my-real-video ytd-channel-name a {
+      color: #A5A5A5 !important;
+      font-size: 14px;
+      font-weight: 400;
+      text-decoration: none;
+    }
+
+  `;
+  document.head.appendChild(style);
+}
 function injectVideoTile(container, video, position = 1) {
   if (!video?.videoId) return;
 
@@ -43,7 +78,7 @@ function injectVideoTile(container, video, position = 1) {
 
   const wrapper = document.createElement("div");
   wrapper.innerHTML = `
-    <ytd-rich-item-renderer class="style-scope ytd-rich-grid-renderer my-real-video">
+    <ytd-rich-item-renderer class="style-scope ytd-rich-grid-renderer my-real-video" data-video-id="${video.videoId}">
       <ytd-rich-grid-media class="style-scope ytd-rich-item-renderer">
         <div id="content" class="style-scope ytd-rich-grid-media">
           <a href="https://www.youtube.com/watch?v=${video.videoId}" class="yt-simple-endpoint style-scope ytd-rich-grid-media" tabindex="-1">
@@ -108,149 +143,245 @@ function injectVideoTile(container, video, position = 1) {
     </ytd-rich-item-renderer>
   `;
 
-  // Clamp position to valid range
   const insertBeforeNode = container.children[position] || null;
   container.insertBefore(wrapper.firstElementChild, insertBeforeNode);
 }
 
-function injectFinalStyles() {
-  if (document.querySelector("#my-injected-style")) return;
 
-  const style = document.createElement("style");
-  style.id = "my-injected-style";
-  style.textContent = `
-    .my-real-video {
-      top: -20px
-    }
-    .my-real-video img{
-      border-radius: 12px;
-    }
-    .style-scope.ytd-rich-grid-media{
-      font-size: 15px
-    }  
-    .views{
-      font-size: 14px
-    }
-    .my-real-video #metadata {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 13.5px;
-      color: var(--yt-spec-text-secondary);
-    }
 
-    .my-real-video ytd-channel-name a {
-      color: #A5A5A5 !important;
-      font-size: 14px;
-      font-weight: 400;
-      text-decoration: none;
-    }
-
-  `;
-  document.head.appendChild(style);
-}
-
-async function fetchVideosFromChannel(uploadsPlaylistId, channelLogo) {
-  const API_KEY = "AIzaSyBopwfGD7jMnQ4MXbvPcfHZ7BJaj_awnSk";
-  const maxResults = 5;
-
-  // Step 1: Fetch playlist items (basic info)
-  const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${API_KEY}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (!data.items || data.items.length === 0) {
-    throw new Error("❌ No videos found for playlist: " + uploadsPlaylistId);
+// Organize videos by channel for round-robin injection
+function organizeVideosByChannel(scrapedVideos) {
+  const channelVideos = {};
+  
+  if (!scrapedVideos || typeof scrapedVideos !== 'object') {
+    console.warn("❌ Invalid scrapedVideos structure");
+    return channelVideos;
   }
-  const videoIds = data.items
-    .map(item => item.snippet?.resourceId?.videoId)
-    .filter(Boolean);
-  if (videoIds.length === 0) {
-    throw new Error("❌ No valid video IDs found");
-  }
-  const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds.join(",")}&key=${API_KEY}`;
-  const statsRes = await fetch(statsUrl);
-  const statsData = await statsRes.json();
-  const statsMap = {};
-  for (const video of statsData.items || []) {
-    statsMap[video.id] = {
-      views: video.statistics?.viewCount || "0"
-    };
-  }
-  return data.items
-    .map(item => {
-      const snippet = item.snippet;
-      const videoId = snippet?.resourceId?.videoId;
-      if (!videoId) return null;
-      return {
-        videoId,
-        title: snippet.title,
-        published: snippet.publishedAt,
-        thumbnail: snippet.thumbnails?.high?.url,
-        channelId: snippet.channelId,
-        channelName: snippet.channelTitle,
-        views: Number(statsMap[videoId]?.views || 0),
-        channelLogo
-      };
-    })
-    .filter(Boolean);
-}
 
-async function getAllVideosFromChannels(channels) {
-  let allVideos = [];
-  for (const { uploadsPlaylistId, handle, channelLogo } of channels) {
+  // Organize videos by channel handle
+  for (const [channelHandle, channelData] of Object.entries(scrapedVideos)) {
     try {
-      const videos = await fetchVideosFromChannel(uploadsPlaylistId, channelLogo);
-      allVideos = allVideos.concat(videos);
+      if (channelData.videos1 && Array.isArray(channelData.videos1)) {
+        // Sort videos by publication date (newest first)
+        channelVideos[channelHandle] = channelData.videos1.sort(
+          (a, b) => new Date(b.published) - new Date(a.published)
+        );
+        console.log(`✅ Organized ${channelVideos[channelHandle].length} videos from ${channelHandle}`);
+      } else {
+        console.warn(`❌ No videos1 array found for channel: ${channelHandle}`);
+      }
     } catch (err) {
-      console.error(`💥 Failed to fetch videos from ${handle} (${uploadsPlaylistId}):`, err);
+      console.error(`💥 Error organizing channel ${channelHandle}:`, err);
     }
   }
-  return allVideos;
+
+  return channelVideos;
 }
 
+// Get videos in round-robin fashion from different channels
+function getRoundRobinVideos(channelVideos, maxVideos = 10, startIndex = 0) {
+  const channels = Object.keys(channelVideos);
+  const selectedVideos = [];
+  
+  if (channels.length === 0) {
+    console.warn("❌ No channels available for round-robin selection");
+    return selectedVideos;
+  }
 
+  let channelIndex = startIndex % channels.length;
+  const videoIndexes = {}; // Track which video index we're at for each channel
+  
+  // Initialize video indexes for each channel based on startIndex
+  channels.forEach((channel, index) => {
+    videoIndexes[channel] = Math.floor((startIndex + index) / channels.length);
+  });
 
-function getLatestNVideos(videos, n = 3) {
-  return videos
-    .sort((a, b) => new Date(b.published) - new Date(a.published))
-    .slice(0, n);
+  // Round-robin selection
+  for (let i = 0; i < maxVideos; i++) {
+    const currentChannel = channels[channelIndex];
+    const currentVideoIndex = videoIndexes[currentChannel];
+    
+    // Check if current channel has more videos
+    if (currentVideoIndex < channelVideos[currentChannel].length) {
+      selectedVideos.push(channelVideos[currentChannel][currentVideoIndex]);
+      videoIndexes[currentChannel]++;
+      console.log(`🎬 Selected video ${currentVideoIndex + 1} from ${currentChannel} (total selected: ${selectedVideos.length})`);
+    }
+    
+    // Move to next channel (round-robin)
+    channelIndex = (channelIndex + 1) % channels.length;
+    
+    // If we've cycled through all channels and none have more videos, break
+    if (selectedVideos.length > 0 && 
+        channels.every(channel => videoIndexes[channel] >= channelVideos[channel].length)) {
+      console.log("📝 All channels exhausted, cycling back to start");
+      // Reset all video indexes to start cycling through videos again
+      channels.forEach(channel => {
+        videoIndexes[channel] = 0;
+      });
+      // If we still can't get a video, break to prevent infinite loop
+      if (currentVideoIndex >= channelVideos[currentChannel].length) {
+        break;
+      }
+    }
+  }
+
+  return selectedVideos;
 }
 
+// Keep track of injection state
+let injectionState = {
+  channelVideos: {},
+  videoFrequency: 3,
+  currentVideoIndex: 0,
+  isInjecting: false
+};
 
-function injectVideosToHomePage(videos) {
+function injectVideosToHomePage(channelVideos, videoFrequency) {
   const container = document.querySelector("div#contents.style-scope.ytd-rich-grid-renderer");
   if (!container) {
-    console.warn("❌ YouTube container not ready. Retrying in 1s...");
-    setTimeout(() => injectVideosToHomePage(videos), 100);
+    console.warn("❌ YouTube container not ready. Retrying in 100ms...");
+    setTimeout(() => injectVideosToHomePage(channelVideos, videoFrequency), 100);
     return;
   }
-  // Example: insert at positions 1, 4, 7 (or any you want)
-  const positions = [1, 4, 7];
-  videos.forEach((video, i) => {
-    injectVideoTile(container, video, positions[i] ?? (i + 1));
-  });
+
+  // Update injection state
+  injectionState.channelVideos = channelVideos;
+  injectionState.videoFrequency = videoFrequency;
+
+  // Initial injection
+  performInjection();
+
+  // Set up observer to watch for new YouTube videos being loaded
+  setupContinuousInjection();
 }
 
+function performInjection() {
+  const container = document.querySelector("div#contents.style-scope.ytd-rich-grid-renderer");
+  if (!container) return;
 
+  const totalYouTubeVideos = container.children.length;
+  const { videoFrequency, currentVideoIndex } = injectionState;
+  
+  console.log(`📊 Total YouTube videos: ${totalYouTubeVideos}, Video frequency: ${videoFrequency}, Current video index: ${currentVideoIndex}`);
+
+  // Calculate how many more videos we can inject
+  const maxPossibleInjections = Math.floor(totalYouTubeVideos / videoFrequency);
+  const alreadyInjected = container.querySelectorAll('.my-real-video').length;
+  const newInjectionsNeeded = maxPossibleInjections - alreadyInjected;
+
+  console.log(`🎯 Max possible injections: ${maxPossibleInjections}, Already injected: ${alreadyInjected}, New needed: ${newInjectionsNeeded}`);
+
+  if (newInjectionsNeeded <= 0) {
+    console.log("✅ No new injections needed right now");
+    return;
+  }
+
+  // Get videos to inject starting from current index
+  const videosToInject = getRoundRobinVideos(
+    injectionState.channelVideos, 
+    newInjectionsNeeded, 
+    injectionState.currentVideoIndex
+  );
+
+  if (videosToInject.length === 0) {
+    console.warn("❌ No more videos available for injection");
+    return;
+  }
+
+  // Calculate injection positions for new videos
+  const injectionPositions = [];
+  for (let i = 0; i < videosToInject.length; i++) {
+    const position = (alreadyInjected + i + 1) * videoFrequency;
+    injectionPositions.push(position);
+  }
+
+  console.log(`🎯 New injection positions: ${injectionPositions.join(', ')}`);
+
+  // Inject videos at calculated positions
+  videosToInject.forEach((video, index) => {
+    const position = injectionPositions[index];
+    if (position <= container.children.length + index + 1) { // Account for videos being added
+      injectVideoTile(container, video, position);
+      console.log(`✅ Injected video "${video.title}" at position ${position}`);
+    }
+  });
+
+  // Update current video index
+  injectionState.currentVideoIndex += videosToInject.length;
+}
+
+function setupContinuousInjection() {
+  // Prevent multiple observers
+  if (injectionState.isInjecting) return;
+  injectionState.isInjecting = true;
+
+  const container = document.querySelector("div#contents.style-scope.ytd-rich-grid-renderer");
+  if (!container) return;
+
+  // Create observer to watch for new YouTube videos
+  const observer = new MutationObserver((mutations) => {
+    let newVideosAdded = false;
+    
+    mutations.forEach((mutation) => {
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        // Check if new YouTube videos were added (not our injected ones)
+        const addedNodes = Array.from(mutation.addedNodes);
+        const newYouTubeVideos = addedNodes.filter(node => 
+          node.nodeType === Node.ELEMENT_NODE && 
+          node.tagName === 'YTD-RICH-ITEM-RENDERER' &&
+          !node.classList.contains('my-real-video')
+        );
+        
+        if (newYouTubeVideos.length > 0) {
+          newVideosAdded = true;
+          console.log(`🆕 Detected ${newYouTubeVideos.length} new YouTube videos`);
+        }
+      }
+    });
+
+    if (newVideosAdded) {
+      // Debounce: wait a bit before injecting to let YouTube finish loading
+      setTimeout(() => {
+        performInjection();
+      }, 500);
+    }
+  });
+
+  // Start observing
+  observer.observe(container, {
+    childList: true,
+    subtree: false
+  });
+
+  // Also set up periodic injection as fallback
+  setInterval(() => {
+    performInjection();
+  }, 3000); // Check every 3 seconds
+
+  console.log("🔄 Continuous injection setup complete");
+}
 
 async function setupVideoInjection() {
-  chrome.storage.local.get(["channels"], async ({ channels }) => {
-    console.log("📦 Retrieved channels from storage:", channels);
+  chrome.storage.local.get(["scrapedVideos", "videoFrequency"], async ({ scrapedVideos, videoFrequency }) => {
+    console.log("📦 Retrieved from storage:", { scrapedVideos, videoFrequency });
 
-    if (!channels || !Array.isArray(channels) || channels.length === 0) {
-      console.warn("❌ No valid channels found in storage.");
+    if (!scrapedVideos || Object.keys(scrapedVideos).length === 0) {
+      console.warn("❌ No scraped videos found in storage.");
       return;
     }
 
-    const allVideos = await getAllVideosFromChannels(channels);
-    if (!allVideos.length) {
-      console.warn("❌ No videos fetched from any channel.");
+    // Default frequency to 3 if not set
+    const frequency = videoFrequency || 3;
+    console.log(`🔄 Using video frequency: ${frequency}`);
+
+    const channelVideos = organizeVideosByChannel(scrapedVideos);
+    if (Object.keys(channelVideos).length === 0) {
+      console.warn("❌ No videos found in scraped data.");
       return;
     }
     
-    const latestVideos = getLatestNVideos(allVideos, 3);
-    console.log("🎬 Latest 3 videos:", latestVideos);
-    injectVideosToHomePage(latestVideos);
+    injectVideosToHomePage(channelVideos, frequency);
   });
 }
 

@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 
@@ -28,6 +29,63 @@
         }
         #addChannelBtn:hover {
             background-color: #45a049;
+        }
+        .frequency-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        .frequency-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .frequency-label {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .frequency-value {
+            background-color: #2196F3;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .frequency-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .frequency-btn {
+            width: 30px;
+            height: 30px;
+            border: none;
+            border-radius: 50%;
+            background-color: #2196F3;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .frequency-btn:hover {
+            background-color: #1976D2;
+        }
+        .frequency-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .frequency-slider {
+            flex: 1;
+            margin: 0 10px;
+        }
+        .frequency-info {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
         }
         .channels-list {
             max-height: 200px;
@@ -86,6 +144,19 @@
     <div class="input-section">
         <input id="channelInput" placeholder="@channelName" />
         <button id="addChannelBtn">Add Channel</button>
+    </div>
+    
+    <div class="frequency-section">
+        <div class="frequency-header">
+            <span class="frequency-label">Frequency of videos</span>
+            <span class="frequency-value" id="frequencyValue">5</span>
+        </div>
+        <div class="frequency-controls">
+            <button class="frequency-btn" id="decreaseBtn">-</button>
+            <input type="range" class="frequency-slider" id="frequencySlider" min="1" max="20" value="5">
+            <button class="frequency-btn" id="increaseBtn">+</button>
+        </div>
+        <div class="frequency-info">Videos per channel to inject (1-20)</div>
     </div>
     
     <div class="channels-list" id="channelsList">
