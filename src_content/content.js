@@ -1,3 +1,7 @@
+// content.js
+// Entry point for the content script. All logic is now modularized.
+import './main.js';
+
 function formatViews(views) {
   const num = parseInt(views);
   if (isNaN(num)) return "0 views";
