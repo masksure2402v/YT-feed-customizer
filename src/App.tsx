@@ -8,7 +8,7 @@ interface Channel {
   channelLogo: string;
 }
 
-const API_KEY = 'AIzaSyBopwfGD7jMnQ4MXbvPcfHZ7BJaj_awnSk';
+const API_KEY = import.meta.env.VITE_YT_API_KEY;
 
 async function getChannelInfoFromHandle(handle: string) {
   const cleanHandle = handle.startsWith('@') ? handle.slice(1) : handle;
@@ -72,6 +72,7 @@ function App() {
       }
       alert(`Channel saved! ${channelInput}`);
     } catch (err) {
+      console.error(err);
       alert('Could not fetch channel info. Make sure the handle is valid.');
     }
     setLoading(false);

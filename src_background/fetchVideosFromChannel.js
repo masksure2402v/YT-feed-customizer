@@ -1,4 +1,4 @@
-const API_KEY = "AIzaSyBopwfGD7jMnQ4MXbvPcfHZ7BJaj_awnSk";
+const API_KEY = import.meta.env.VITE_YT_API_KEY;
 
 export async function fetchVideosFromChannel(uploadsPlaylistId, channelLogo, channelId, channelName) {
   const targetVideoCount = 10; // Target number of regular videos to collect
