@@ -156,7 +156,7 @@ function App() {
                 className="delete-btn"
                 onClick={() => handleDeleteChannel(idx)}
               >
-                Delete
+                Delete 
               </button>
             </div>
           ))
